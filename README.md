@@ -1,64 +1,68 @@
-# AtlasB2B Premium — version test GitHub Pages + Supabase
+# AtlasB2B Premium — reconstruction GitHub Pages + Supabase
 
-**Statut : prototype fonctionnel pour tests, PAS prêt pour une exploitation commerciale.** Aucun paiement réel, aucune réservation confirmée chez un hôtel, aucune API externe branchée.
+**Version de TEST uniquement** : aucun paiement, aucun crédit prépayé, aucune réservation réelle, aucun reversement fournisseur et aucune API hôtelière opérationnelle.
 
-## Fonctions testables
-- Connexion et inscription par Supabase Auth.
-- 3 espaces séparés par rôles et sécurisés en base (RLS) : **admin**, **DMC**, **agence**.
-- Validation agence / conversion d’un compte en DMC par l'administrateur.
-- Admin : catalogue fournisseurs API (registre seulement, sans clés), publication des hôtels, marge agence.
-- DMC : création d'hôtels en brouillon, description, photo d'établissement, chambres et photos par type, import Excel modèle NATBEDS.
-- Agence validée : recherche d'offres sur les hôtels publiés, calcul serveur des prix selon les marges, demandes de réservation.
-- Admin : validation/refus des demandes **en mode démonstration**.
-- Export Excel des tarifs enregistrés (format tabulaire standard). Import Excel : modèle NATBEDS joint.
+## 1. Ce qui fonctionne dans la démo (après configuration Supabase)
+- Compte Supabase Auth, trois espaces : **Admin**, **DMC** et **Agence cliente**.
+- Admin : valide les agences et les DMC, gère le registre des API (sans clés), publie les hôtels, règle la majoration commerciale de chaque agence, accepte/refuse les **demandes fictives**.
+- DMC : crée ses hôtels en brouillon, ajoute descriptifs, photo d'hôtel, catégories de chambres et photo par type, importe les tarifs Excel de type NATBEDS.
+- Agence approuvée : recherche les hôtels publiés et les tarifs de vente calculés par Supabase ; dépose des demandes manuelles, sans blocage de stock ni argent.
+- Export Excel des tarifs enregistrés. Import Excel en transaction unique, pour éviter les saisons partiellement mises à jour si une erreur survient.
 
-## Démarrage local dans VS Code / Windows PowerShell
-1. Installer Node.js LTS.
-2. Dans VS Code, ouvrir ce dossier.
-3. Créer `.env.local` en copiant `.env.example` et remplacer les deux valeurs par **Project URL** et **publishable key** (ou ancienne clé `anon`) depuis Supabase > Project Settings > API. **Ne jamais utiliser `service_role`/secret key !**
-4. Dans Supabase (projet de test neuf) : `SQL Editor` > exécuter `supabase/schema.sql`.
-5. Dans Auth > Providers, activer Email. Pour les essais, confirmer les emails reçus, ou désactiver la confirmation des emails uniquement dans le projet de test.
-6. Terminal :
-   ```powershell
-   npm.cmd install
-   npm.cmd run dev
-   ```
-7. Ouvrir l'adresse affichée (souvent http://localhost:5173).
-8. Créer ton premier compte via l'interface. Dans Supabase SQL Editor, **une seule fois** :
-   ```sql
-   update public.profiles
-   set role='admin', agency_id=null, dmc_id=null
-   where email='TON_EMAIL_ADMIN';
-   ```
-   Puis **se déconnecter / reconnecter**. Ne jamais publier cette instruction avec un email réel.
-9. Créer un deuxième compte pour une DMC et un troisième pour une agence. Dans l'espace admin, convertir le deuxième en DMC et valider le troisième.
-10. La DMC crée un hôtel et charge le fichier Excel ; admin publie ; agence cherche et envoie une demande ; admin la traite.
+## 2. Installation dans GitHub Codespaces (Linux)
+1. Dézipper et transférer **le contenu** du dossier à la racine du dépôt `ATLASB2B` (et non le dossier parent).
+2. Vérifier que `package.json`, `index.html`, `vite.config.js`, `src/`, `supabase/`, `.github/workflows/deploy.yml` se trouvent à la racine. **Supprimer les anciens workflows de Pages (`pages.yml` ou autres fichiers de déploiement) pour ne garder QUE `.github/workflows/deploy.yml`.**
+3. Exécuter `npm install` puis `npm run dev` dans Codespaces. **Ne pas utiliser `npm.cmd` dans Codespaces** : `npm.cmd` est réservé à Windows PowerShell.
+4. Créer `.env.local` à partir de `.env.example` et renseigner la **Project URL** et la clé **publishable/anon** de Supabase. Ne jamais publier `.env.local`.
+5. Pour compiler localement : `npm run build` puis `npm run check:dist`.
 
-## Hébergement GitHub Pages, sans Vercel
-1. Créer un dépôt GitHub (public pour GitHub Pages gratuit ; vérifier les conditions de votre offre GitHub si dépôt privé) et y envoyer **le contenu du dossier à la racine**, pas le dossier englobant.
-2. Renommer la branche principale en `main` si nécessaire.
-3. Dépôt > **Settings > Secrets and variables > Actions > Variables** :
-   - `VITE_SUPABASE_URL` = URL du projet Supabase
-   - `VITE_SUPABASE_ANON_KEY` = clé publique Supabase
-4. Dépôt > **Settings > Pages > Build and deployment > Source** : sélectionner **GitHub Actions**.
-5. La workflow `.github/workflows/pages.yml` construit et publie automatiquement le site après un push sur `main`.
-6. URL typique : `https://TON_COMPTE.github.io/NOM_DU_DEPOT/`.
-7. Dans Supabase > **Authentication > URL Configuration** : ajouter l'URL GitHub Pages dans **Redirect URLs**, et configurer la Site URL si nécessaire pour la confirmation email.
+## 3. Installation Supabase
+1. Créer un projet **de test** Supabase, activer le fournisseur Email dans Authentication.
+2. **Nouvelle base vide :** exécuter **une seule fois** `supabase/schema.sql` depuis SQL Editor.
+3. **Projet Supabase ayant déjà le schéma AtlasB2B précédent :** NE PAS réexécuter `schema.sql`. Faire une sauvegarde puis exécuter `supabase/migration_depuis_v1.sql` à la place. Ne pas supprimer tes tables existantes.
+4. Dans Supabase Auth > URL Configuration, autoriser l’URL exacte de GitHub Pages : `https://TON_COMPTE.github.io/ATLASB2B/` ; ajouter la même URL aux redirections autorisées.
+5. Créer ton propre utilisateur via le site ; après confirmation du courriel, promouvoir son compte dans Supabase SQL Editor avec :
 
-`VITE_` signifie que les deux variables sont **publiques** dans le navigateur. C'est normal pour la clé *publishable/anon* : la sécurité repose sur RLS et sur les fonctions SQL. Ne jamais ajouter de secrets de fournisseurs, de clés bancaires ou de `service_role` au projet GitHub Pages.
+```sql
+update public.profiles
+set role='admin', agency_id=null, dmc_id=null
+where email='TON_EMAIL_ADMIN';
+```
 
-## Limites importantes
-- Uniquement demandes manuelles de réservation : **pas de stock garanti, de voucher réel, de paiement, de crédit agence, de SEPA, ni de reversement fournisseur**. Le bouton « Valider » simule une décision administrative.
-- Registre de partenaires API sans appels API : les clés API exigent une composante serveur sécurisée, qu'on ajoutera ultérieurement (Supabase Edge Functions convient).
-- Grille NATBEDS : uniquement les lignes de tarifs de chambres 5 à 14, les 6 périodes et 5 pensions. Les réductions enfants/promotions ne sont pas calculées. L'année de saison doit être renseignée. L'export est un Excel tabulaire, pas une reconstruction exacte du modèle NATBEDS.
-- L'interface de recherche gère un séjour d'au maximum 30 nuits, un type de chambre, et n'intègre pas encore de disponibilité réelle. Attention aux éventuels **chevauchements de périodes** : ne pas en créer pour une même chambre/pension.
-- Comptes utilisateur : ne pas utiliser de données réelles ou sensibles pour tester. Pas encore de réinitialisation par interface, traitement RGPD complet, journaux financiers immuables ou protections renforcées de production.
-- GitHub Pages peut publier un site statique React, tandis que Supabase héberge la base et l'auth. Cela évite un serveur web supplémentaire pour les **fonctionnalités testables**. L'exploitation commerciale avec réservations API, paiement et wallets nécessitera du backend sécurisé et une validation juridique.
+Cette manipulation est une étape d'installation réservée au propriétaire du projet. Vérifier que **exactement un utilisateur attendu** a été modifié, puis se déconnecter et reconnecter. Ne jamais exécuter sur une adresse non vérifiée.
 
-## Vérifications de sécurité
-- RLS activée sur toutes les tables applicatives.
-- Les requêtes de prix agence sont exécutées dans une fonction Supabase et ne divulguent pas les tarifs nets.
-- L'administrateur est le seul à gérer les API fournisseurs et à publier les hôtels.
-- Une DMC peut seulement modifier ses hôtels non publiés.
-- Les demandes de réservation sont créées via une fonction SQL qui recalcule les prix.
-- Aucun secret API ou bancaire dans les variables publiques.
+6. Inscrire deux autres utilisateurs de test, puis utiliser l'espace Admin pour valider l'agence et convertir l'autre en DMC.
+
+## 4. GitHub Pages : étapes exactes
+1. Dans GitHub > Settings > Pages > Build and deployment, choisir **GitHub Actions** et **pas** « Deploy from a branch ».
+2. Dans GitHub > Settings > Secrets and variables > Actions > **Variables**, créer :
+   - `VITE_SUPABASE_URL` = `https://...supabase.co`
+   - `VITE_SUPABASE_ANON_KEY` = **clé publique** Supabase (`sb_publishable_...` ou ancienne `anon`)
+3. La workflow fournie vérifie que les deux variables sont définies, compile avec `GITHUB_PAGES=true`, vérifie que `dist/index.html` pointe vers les scripts `/<DEPOT>/assets/...` et publie **dist**. Si le site tente `/src/main.jsx`, c'est que GitHub Pages publie toujours la source ou l'ancien artefact.
+4. Pousser sur `main` ; Actions > `Deploy AtlasB2B to GitHub Pages` : vérifier les étapes **Build**, **Validate built files and paths**, **Deploy**.
+5. Ouvrir `https://TON_COMPTE.github.io/ATLASB2B/` ; en cas de page blanche, ouvrir `https://TON_COMPTE.github.io/ATLASB2B/diagnostic.html` pour détecter les fichiers 404.
+6. Vider le cache du navigateur (`Ctrl + F5`) après un nouveau déploiement.
+
+**Important :** un `.env.local` dans Codespaces n'est pas automatiquement pris en compte par GitHub Actions. Les variables GitHub sont nécessaires à la compilation en ligne.
+
+## 5. Parcours de test
+- Admin : inviter/valider la DMC et l'agence ; ouvrir le registre fournisseur API (configuration uniquement).
+- DMC : créer un hôtel, ajouter types de chambres, photos, puis importer `modele_tarifs_natbeds.xlsx` en saisissant l'année de saison. Enregistrer les tarifs.
+- Admin : publier l'hôtel, définir la marge commerciale de l'agence.
+- Agence : rechercher les dates couvertes par la grille, vérifier le prix, créer une **demande sans paiement**.
+- Admin : marquer la demande comme validée ou refusée **dans la simulation**.
+
+## 6. Points bloquants connus / limites
+- **Pas de backend bancaire ni de credentials de fournisseurs dans GitHub Pages.** Pour de vrais paiements, soldes prépayés, débit agence, confirmations API, il faudra une couche serveur sécurisée et une validation juridique du montage.
+- **Pas de stock hôtelier garanti** : une grille tarifaire ne constitue pas une disponibilité réelle. Les réservations ne sont que des demandes de test.
+- **Import Excel** : six périodes / cinq pensions du modèle NATBEDS. Les promotions, suppléments et réductions enfants ne sont pas encore calculés. L'import remplace atomiquement les anciens tarifs dont la période chevauche la nouvelle saison ; faire des essais sur des hôtels fictifs uniquement.
+- **Photos** : stockage Supabase public, sans données confidentielles. La V1 prend une photo principale par hôtel et par type de chambre ; galerie complète à venir.
+- **Rôles** : la création d'un nouvel utilisateur se fait en agence en attente ; un admin peut le transformer en DMC. Les droits sont vérifiés en PostgreSQL (RLS), pas simplement en masquant les boutons.
+- **Tarifs nets** : la lecture directe de `booking_requests.net_total_eur` est interdite aux clients. Les prix agence sont calculés par fonction SQL.
+- **Version commerciale** : prévoir tests automatisés d'intégration Supabase, observabilité, gestion des disponibilités, historiques de versions de tarifs, suppression RGPD, validations financières et contrôles légaux.
+
+## 7. Vérifications possibles dans ce ZIP
+- Sources JS/CSS/SQL et configuration GitHub Actions incluses.
+- `scripts/check-dist.mjs` détecte automatiquement le problème « `/src/main.jsx` publié sur GitHub Pages » après compilation.
+- Vérification locale complète : `npm install && npm run build && npm run check:dist` sur une machine avec accès à npm.
+- Le modèle Excel NATBEDS fourni est un **exemple** et reste inchangé.

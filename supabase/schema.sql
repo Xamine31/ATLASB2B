@@ -109,7 +109,43 @@ create policy suppliers_admin_read on public.api_suppliers for select to authent
 create policy suppliers_admin_insert on public.api_suppliers for insert to authenticated with check(public.is_admin());
 create policy suppliers_admin_update on public.api_suppliers for update to authenticated using(public.is_admin()) with check(public.is_admin());
 create policy booking_read on public.booking_requests for select to authenticated using(public.is_admin() or agency_id=public.my_agency() or exists(select 1 from public.hotels h where h.id=hotel_id and h.dmc_id=public.my_dmc()));
+-- Ne jamais exposer net_total_eur au navigateur, même avec RLS : RLS protège les LIGNES, pas les colonnes.
+revoke all on public.booking_requests from anon, authenticated;
+grant select (id,agency_id,hotel_id,room_name,board,checkin,checkout,guest_name,total_eur,status,created_at)
+  on public.booking_requests to authenticated;
+
 -- Aucun INSERT / UPDATE direct sur booking_requests: via RPC ci-dessous.
+
+-- Import tarifaire atomique : si une ligne échoue, AUCUN tarif n'est modifié.
+-- Les dates couvertes par le nouveau fichier remplacent les tarifs existants sur ce périmètre.
+create or replace function public.replace_hotel_rates(p_hotel uuid,p_rows jsonb)
+returns integer language plpgsql security definer set search_path=public as $$
+declare h public.hotels; r jsonb; dmin date; dmax date; n integer;
+begin
+  select * into h from public.hotels where id=p_hotel for update;
+  if not found then raise exception 'Hôtel introuvable'; end if;
+  if not (public.is_admin() or (public.my_role()='dmc' and h.dmc_id=public.my_dmc() and h.status='draft'))
+    then raise exception 'Modification tarifaire non autorisée'; end if;
+  if jsonb_typeof(p_rows) <> 'array' or jsonb_array_length(p_rows) < 1 or jsonb_array_length(p_rows)>3000
+    then raise exception 'Fichier tarifaire invalide ou trop volumineux'; end if;
+  select min((e->>'date_start')::date),max((e->>'date_end')::date) into dmin,dmax
+    from jsonb_array_elements(p_rows) e;
+  if dmin is null or dmax is null or dmax < dmin or dmax>dmin+interval '2 years'
+    then raise exception 'Période tarifaire invalide'; end if;
+  delete from public.rates where hotel_id=p_hotel and date_start<=dmax and date_end>=dmin;
+  for r in select value from jsonb_array_elements(p_rows) loop
+    if coalesce(length(trim(r->>'room_name')),0)<1 or (r->>'board') not in ('RO','BB','HB','FB','ALL IN')
+      or (r->>'net_price')::numeric <0 or (r->>'date_start')::date>(r->>'date_end')::date
+      then raise exception 'Ligne de tarif incorrecte'; end if;
+    insert into public.room_types(hotel_id,name) values(p_hotel,trim(r->>'room_name')) on conflict(hotel_id,name) do nothing;
+    insert into public.rates(hotel_id,room_name,board,date_start,date_end,net_price)
+    values(p_hotel,trim(r->>'room_name'),r->>'board',(r->>'date_start')::date,(r->>'date_end')::date,(r->>'net_price')::numeric);
+  end loop;
+  get diagnostics n = row_count;
+  return jsonb_array_length(p_rows);
+end $$;
+revoke all on function public.replace_hotel_rates(uuid,jsonb) from public;
+grant execute on function public.replace_hotel_rates(uuid,jsonb) to authenticated;
 
 -- Seul l'admin peut approuver agences, promouvoir DMC, publier les hôtels, ou changer la marge.
 create or replace function public.admin_set_user(p_user uuid,p_role text,p_approve boolean default true)
@@ -195,7 +231,7 @@ values('hotel-photos','hotel-photos',true,5242880,array['image/jpeg','image/png'
 on conflict (id) do nothing;
 create policy photo_public_read on storage.objects for select to public using(bucket_id='hotel-photos');
 create policy photo_upload_owner on storage.objects for insert to authenticated
-with check(bucket_id='hotel-photos' and (storage.foldername(name))[1]=(select auth.uid())::text);
+with check(bucket_id='hotel-photos' and (storage.foldername(name))[1]=(select auth.uid())::text and (public.is_admin() or public.my_role()='dmc'));
 
 -- APRÈS inscription d'un compte dans l'application, exécuter EN PRIVÉ dans SQL Editor :
 -- update public.profiles set role='admin',agency_id=null,dmc_id=null where email='votre-email@exemple.fr';

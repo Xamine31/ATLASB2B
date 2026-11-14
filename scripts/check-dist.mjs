@@ -1,0 +1,13 @@
+import {readFileSync, existsSync, readdirSync} from 'node:fs';
+import {join} from 'node:path';
+const html = readFileSync('dist/index.html', 'utf8');
+const repo = (process.env.GITHUB_REPOSITORY || '').split('/').pop();
+const base = process.env.GITHUB_PAGES === 'true' ? `/${repo}/` : '/';
+const fail = (message) => {console.error(`BUILD CHECK FAILED: ${message}`);process.exit(1)};
+if (!/<div id="root">/.test(html)) fail('Missing React root element');
+if (/src\/main\.(jsx|tsx)/.test(html)) fail('The source index.html was uploaded instead of compiled dist/index.html');
+if (!existsSync('dist/assets')) fail('Missing dist/assets');
+const assets = readdirSync('dist/assets');
+if (!assets.some(a => a.endsWith('.js'))) fail('No compiled JS bundle');
+if (!html.includes(`${base}assets/`)) fail(`Incorrect Vite base. Expected ${base}assets/ in dist/index.html`);
+console.log(`OK: compiled index.html, ${assets.length} assets, base=${base}`);
