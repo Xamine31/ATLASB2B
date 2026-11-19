@@ -1,73 +1,69 @@
-# AtlasB2B Premium V5 — GitHub Pages + Supabase
+# AtlasB2B Premium — V6 catalogue et recherche
 
-**Projet de démonstration. Aucune API hôtelière active, aucun paiement réel, aucun droit d'émettre de vouchers de voyage réel.**
+**Prototype de test uniquement.** GitHub Pages + Supabase. Aucune connexion effective aux fournisseurs hôteliers, aucun paiement réel, aucun debit automatique. La V5 finances (validation manuelle par admin) reste incluse.
 
-Thème : forêt / champagne / terracotta / ivoire / vert sauge. Interface React + Vite et Supabase. Trois espaces : **Admin**, **DMC**, **Agence**.
+## Changements V6
 
-## Fonctionnalités
+- Interface modernisée : **Manrope**, vert forêt, sauge, champagne, terracotta et ivoire.
+- **Hôtels** : liste → clic sur un hôtel → 4 onglets (établissement, chambres, tarifs, promotions). La création ouvre une fiche complète.
+- **10 catégories NATBEDS**, initialisées à la création de chaque hôtel : SGL, DBL, TRIPL, QDL, SUITE, JUNIOR SUITE, SGL SV, DBL SV, TRPL SV, QDL SV. Libellé, capacité, description, photo et visibilité éditables. Nouvelles chambres possibles.
+- **7 réductions du modèle NATBEDS** : 0–2 ans, 2–6 ans, 6–11 ans, 3e adulte, réservation anticipée, voyage de noces, senior. Elles sont configurables et **non publiques par défaut**. Leur activation ne modifie pas automatiquement le prix des réservations : affichage informatif seulement.
+- **Import Excel persistant** : bouton « Enregistrer dans Supabase » → RPC `import_hotel_excel_v6` → transaction SQL → relecture depuis Postgres. Les réductions par saison sont enregistrées dans `hotel_promotion_periods` ; les tarifs nets dans `rates`.
+- **Recherche** : les offres nécessitent compte agence approuvé + hôtel publié + chambre rendue publique + tarif couvrant chaque nuit. Filtrage par nom d'hôtel / ville / pays. Prix majorés de l'agence, sans exposer les prix nets.
 
-- **Admin** : tableau de bord, validation des comptes, catalogue, page **Créer un hôtel**, publication, grilles Excel, page dédiée **Fournisseurs API** (registre sans credentials), demandes de réservation, et **Centre financier**.
-- **DMC** : ses hôtels et leur création dans une page distincte, fiches/photos, types de chambres/photos, import/export Excel, demandes visibles. La publication appartient à l'admin.
-- **Agence** : recherche d'offres publiées avec tarifs personnalisés, demandes de réservation manuelles, consultation du crédit fictif, demandes de rechargement par virement à contrôler par l'admin.
-- **Finances** : demandes de rechargement avec référence bancaire, approbation ou refus **manuels**, mouvements de crédit validés et tracés, débits de réservations confirmées **uniquement sur demande explicite de l'admin**, remboursements/ajustements manuels, brouillons de règlements DMC/hôtels/API, validation admin, référence bancaire de règlement, export CSV de contrôle et journal d'audit. **Aucun transfert réel, aucun SEPA pain.001, aucun rapprochement automatisé.**
+## Installer sur ton projet existant (V5)
 
-## Déploiement sur Supabase EXISTANT (Rebuild déjà installé)
+**ÉTAPE 1 : SAUVEGARDE** du dépôt et de la base Supabase de test (ne pas tester sur une base de production).
 
-1. Faites une **sauvegarde** et utilisez un **projet Supabase de test**.
-2. Si le projet contient déjà la V2 Rebuild, **NE REJOUEZ PAS** `supabase/schema.sql` ni `supabase/migration_depuis_v1.sql` : ces fichiers créent des objets déjà existants.
-3. Dans **SQL Editor**, exécutez **une seule fois** `supabase/migration_v5_finances.sql` ; assurez-vous que l'éditeur affiche `Success`.
-4. Vérifiez dans Table Editor que les tables `wallet_topup_requests`, `wallet_entries`, `supplier_payables`, `finance_audit` existent.
-5. Si vous démarrez d'un Supabase **totalement vierge**, exécutez d'abord `supabase/schema.sql`, puis `supabase/migration_v5_finances.sql`. **Ne lancez pas de scripts d'une autre version au hasard.**
-6. Les opérations financières requièrent un utilisateur au rôle `admin`. Le code ne fournit **aucun mot de passe ni compte admin prédéfini**. Consultez le guide d'initialisation du schéma existant pour promouvoir votre propre compte administrateur depuis SQL Editor après inscription.
+**ÉTAPE 2 : SUPABASE (OBLIGATOIRE AVANT DE METTRE EN LIGNE LA V6)**
 
-## GitHub Pages
+Dans Supabase → SQL Editor, exécuter **une fois** `supabase/migration_v6_catalogue.sql`. Cette migration conserve les réservations et tables financières de V5. Vérifier la présence des colonnes `room_types.is_public`, `room_types.display_name` et des tables `hotel_promotions`, `hotel_promotion_periods`.
 
-1. Décompressez le ZIP et envoyez les **fichiers à la racine** de votre dépôt `ATLASB2B`. Ne mettez pas un sous-dossier contenant le projet.
-2. Dans le dépôt GitHub : **Settings → Secrets and variables → Actions → Variables** :
-   - `VITE_SUPABASE_URL` = URL de votre projet, ex. `https://xxx.supabase.co`
-   - `VITE_SUPABASE_ANON_KEY` = clé publique `anon`/publishable **jamais** `service_role` / secret.
-3. **Settings → Pages → Source → GitHub Actions**.
-4. Le workflow `.github/workflows/deploy.yml` installe, compile, vérifie `dist/`, et publie ce dossier. Il ajoute automatiquement `/ATLASB2B/` à la base des ressources.
-5. Dans Supabase **Authentication → URL Configuration**, configurez `https://xamine31.github.io/ATLASB2B/` comme Site URL et autorisez la redirection `https://xamine31.github.io/ATLASB2B/**` (adapter si autre dépôt).
-6. Ouvrez le workflow **Actions** et vérifiez les étapes Build et Deploy. Diagnostic : `/ATLASB2B/diagnostic.html`.
+- Si tu utilises une base **vierge**, exécuter dans l'ordre : `supabase/schema.sql`, `supabase/migration_v5_finances.sql`, puis `supabase/migration_v6_catalogue.sql`.
+- Si tu es déjà sur V5, exécuter **uniquement** la migration V6.
+- Ne jamais rejouer `schema.sql` sur une base contenant déjà les tables.
+- La migration ajoute un filtre aux politiques RLS des chambres. Les chambres préexistantes sont publiques par défaut ; les chambres initialisées sur une nouvelle fiche sont masquées par défaut jusqu'à validation manuelle.
 
-Pour un test Codespaces :
+**ÉTAPE 3 : GITHUB**
+
+Décompresser le ZIP **directement à la racine** du dépôt `ATLASB2B` et remplacer les fichiers existants. Dans Settings → Pages, choisir `GitHub Actions` et conserver les variables de dépôt `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` (clé publique seulement). Le workflow construit `dist` et le publie, jamais `src` directement.
+
+**ÉTAPE 4 : TEST PARCOURS**
+
+1. Connecté comme Admin ou DMC, ouvrir **Hôtels** → **Nouvel hôtel**. Compléter identité, photo, description.
+2. **Chambres** : vérifier les 10 catégories ; pour les chambres proposées à la vente, cocher **Publique** ; ajouter description et photo.
+3. **Tarifs** : importer `exemple_tarifs_fictifs.xlsx`, choisir l'année de départ (novembre) correspondant au séjour ; vérifier l'aperçu, puis **Enregistrer dans Supabase**. Attendre la relecture et vérifier que le nombre de lignes enregistrées est supérieur à zéro.
+4. **Promotions** : vérifier 7 règles, pourcentages et périodes ; modifier descriptions et activer **Publique** uniquement pour les règles à communiquer. Les remises ne sont pas déduites des prix automatiquement.
+5. Admin : publier l'hôtel et approuver un compte agence dans **Agences & DMC**.
+6. Agence : **Rechercher un hôtel**, ville ou nom, dates comprises dans la grille. Les offres doivent apparaître, ainsi que les descriptions et promotions publiques. Prix = somme des prix nets/nuit × (1+majoration agence). Toute réservation est une simple demande.
+7. Si résultats vides, contrôler dans cet ordre : (1) agence validée ; (2) hôtel publié ; (3) chambre publique ; (4) tarifs réels dans table `rates` ; (5) période du séjour couverte ; (6) migration V6 exécutée ; (7) F12 → Console et Réseau.
+8. Finances : les validations manuelles et le fonctionnement test de V5 demeurent inchangés.
+
+## Limites à connaître
+
+- **Marge fixe par agence**, prix nets non montrés aux agences. Pas encore de disponibilité par chambre / stop sales / allotements : le moteur correspond à une **recherche tarifaire**, pas à une confirmation de disponibilité réelle.
+- Promos importées et visibles si publiées, mais **jamais appliquées automatiquement** au prix. Pourcentage de réduction théorique, règles d'éligibilité et cumul non finalisés.
+- Import remplace les tarifs de l'hôtel qui se chevauchent sur **l'ensemble de la saison importée**. Une erreur SQL annule toute la transaction ; néanmoins sauvegarder les données avant import.
+- Photos stockées dans le bucket public `hotel-photos`, visibles à toute personne connaissant leur URL. Ne pas y placer des documents confidentiels.
+- Deux versions des tables financière/hôtel peuvent demander une adaptation si tu as personnalisé ton schéma Supabase. La migration n'a pas été exécutée contre ton vrai projet Supabase.
+- L'archive contient le code source. **La compilation complète et le test de connexion réelle Supabase ne sont pas vérifiés ici**, faute d'accès npm/Supabase.
+
+## Développement local
 
 ```bash
 npm install
 cp .env.example .env.local
-# Renseigner les variables VITE_* uniquement dans .env.local
+# compléter VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY dans .env.local
 npm run dev
 ```
 
-Pour tester le build :
+Test du déploiement :
 
 ```bash
 GITHUB_PAGES=true GITHUB_REPOSITORY=Xamine31/ATLASB2B npm run build
 GITHUB_PAGES=true GITHUB_REPOSITORY=Xamine31/ATLASB2B npm run check:dist
 ```
 
-## Tests de bout en bout
+## Sécurité
 
-1. Avec **Admin** : approuver une agence et convertir un compte en DMC. Créer un hôtel sur **Créer un hôtel** ou laisser la DMC le créer, puis sélectionner l'hôtel dans le **Catalogue**.
-2. Avec **DMC** : importer `exemple_tarifs_fictifs.xlsx`, ajouter photos et chambres, vérifier la période tarifaire. Le modèle NATBEDS se trouve dans `modele_tarifs_natbeds.xlsx`.
-3. Avec **Admin** : publier l'hôtel, configurer la majoration de l'agence.
-4. Avec **Agence** : rechercher un hôtel pour des dates couvertes par l'Excel, puis envoyer une **demande non engageante**.
-5. Avec **Admin** : valider/refuser cette demande dans **Demandes**. Validation = **simulation administrative**, pas confirmation fournisseur.
-6. Avec **Agence** : dans **Mon crédit**, indiquer une référence de virement fictive et soumettre une demande de 1 000 €.
-7. Avec **Admin** : dans **Centre financier**, approuver la demande **après vérification fictive**. Vérifier le journal de crédit. Puis sélectionner une agence et saisir un débit lié à une réservation simulée confirmée. Le système doit refuser le découvert et les débits dupliqués.
-8. Avec **Admin** : préparer un règlement DMC, l'approuver, exporter la **liste CSV** puis le marquer payé avec une référence bancaire fictive. Le statut est purement déclaratif.
-9. Tester qu'une agence ne peut ni créer d'API ni voir des écritures d'une autre agence. Vérifier les règles RLS en base et non uniquement les menus.
-
-## Limites empêchant un usage commercial réel
-
-- Aucun paiement bancaire/SEPA, aucune preuve automatique de réception de fonds. La validation admin est uniquement déclarative.
-- Aucun contrôle de disponibilité contractuelle, pas d'inventaire garanti, aucun vrai fournisseur/API connecté.
-- Une réservation marquée « confirmée » par l'admin **ne représente pas une confirmation d'hôtel** ; pas de débit automatique : séparation délibérée pour les tests.
-- Pas de workflow anti-fraude/justificatifs bancaires, de double approbation par personnes distinctes, ni de véritable rapprochement bancaire.
-- Pas de devises, TVA, clôture comptable, facturation légale, fonds protégés, garantie financière ni vérification juridique.
-- Le modèle Excel importe certaines grilles chambres/pensions/périodes, **pas** toutes les règles commerciales (enfants, stop sales, disponibilité, allotement).
-- Les fichiers/photos d'hôtels sont publics via le bucket `hotel-photos` ; ne téléversez pas de données confidentielles dans ce bucket.
-- Le registre API permet de noter des partenaires **sans appeler leurs APIs ni stocker leurs secrets**.
-
-**Avant toute exploitation réelle avec de l'argent :** vérification juridique française (voyages / encaissement pour compte de tiers), analyse de sécurité de Supabase/RLS, paiement via prestataire adapté, audit financier, contrôles anti-double réservation, sauvegardes et tests d'intégration.
+Jamais de clé `service_role`, de jetons fournisseurs, de secrets bancaires ou d'ordres SEPA dans le code front-end public. Les validations financières restent des écritures simulées, initiées et contrôlées par l'administrateur. Une revue juridique et un audit technique sont indispensables avant usage commercial.

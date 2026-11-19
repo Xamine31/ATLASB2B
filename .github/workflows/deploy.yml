@@ -36,6 +36,8 @@ jobs:
           test -n "$VITE_SUPABASE_ANON_KEY" || { echo "::error::VITE_SUPABASE_ANON_KEY manquante"; exit 1; }
           case "$VITE_SUPABASE_URL" in https://*) ;; *) echo "::error::VITE_SUPABASE_URL doit commencer par https://"; exit 1 ;; esac
           echo "Variables publiques detectees (valeurs masquees)."
+      - name: Validate V6 structure
+        run: npm run check:v6
       - name: Build
         run: npm run build
         env:
