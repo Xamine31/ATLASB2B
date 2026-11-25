@@ -22,15 +22,54 @@ const $=async (promise)=>{const {data,error}=await promise;if(error)throw new Er
 const BOARDS=['RO','BB','HB','FB','ALL IN'];
 const normalizeRoute=()=>{const hash=decodeURIComponent(window.location.hash||'#/dashboard');return hash.startsWith('#/')?hash.slice(1):'/dashboard'};
 function App(){
- const [user,setUser]=useState(null),[profile,setProfile]=useState(null),[route,setRoute]=useState(normalizeRoute),[loading,setLoading]=useState(true),[err,setErr]=useState(''),[notice,setNotice]=useState(''),[refresh,setRefresh]=useState(0),[mobileMenu,setMobileMenu]=useState(false),[compact,setCompact]=useState(false);
+ const [user,setUser]=useState(null),[profile,setProfile]=useState(null),[route,setRoute]=useState(normalizeRoute),[loading,setLoading]=useState(true),[err,setErr]=useState(''),[notice,setNotice]=useState(''),[refresh,setRefresh]=useState(0),[mobileMenu,setMobileMenu]=useState(false),[compact,setCompact]=useState(false),[authProblem,setAuthProblem]=useState(''),[authAttempt,setAuthAttempt]=useState(0);
  const notify=(message)=>{setNotice(message);setErr('');setRefresh(n=>n+1)},fail=ex=>{setErr(ex?.message||String(ex));setNotice('')};
  const reload=()=>setRefresh(n=>n+1);
  const navigate=(path)=>{window.location.hash='#'+path;setMobileMenu(false);setErr('');window.scrollTo({top:0,behavior:'instant'})};
  useEffect(()=>{const sync=()=>setRoute(normalizeRoute());window.addEventListener('hashchange',sync);return()=>window.removeEventListener('hashchange',sync)},[]);
- useEffect(()=>{if(!supabase){setLoading(false);return;}supabase.auth.getUser().then(({data,error})=>{if(error)console.warn(error.message);setUser(data?.user||null)}).catch(e=>console.error(e)).finally(()=>setLoading(false));const {data:auth}=supabase.auth.onAuthStateChange((_event,session)=>{setUser(session?.user||null);setProfile(null)});return()=>auth.subscription.unsubscribe()},[]);
+ useEffect(()=>{
+  if(!supabase){setLoading(false);return;}
+  let active=true;
+  let finished=false;
+  setLoading(true);
+  setAuthProblem('');
+  const complete=(message='')=>{
+    if(!active||finished)return;
+    finished=true;
+    clearTimeout(timer);
+    setAuthProblem(message);
+    setLoading(false);
+  };
+  const timer=setTimeout(()=>{
+    complete('La connexion à Supabase ne répond pas. Vérifiez le réseau et réessayez.');
+  },12000);
+  // Listening for INITIAL_SESSION also prevents an indefinite screen while getUser hangs.
+  const {data:auth}=supabase.auth.onAuthStateChange((event,session)=>{
+    if(!active)return;
+    if(event==='INITIAL_SESSION'||event==='SIGNED_IN'||event==='SIGNED_OUT'){
+      setUser(session?.user||null);
+      setProfile(null);
+      complete();
+    }
+  });
+  supabase.auth.getUser().then(({data,error})=>{
+    if(!active||finished)return;
+    if(error){
+      if(error.status===401||error.status===403){setUser(null);complete();return;}
+      complete('Impossible de vérifier la session Supabase : '+error.message);
+      return;
+    }
+    setUser(data?.user||null);
+    complete();
+  }).catch(e=>{
+    if(active&&!finished)complete('Erreur de connexion Supabase : '+(e?.message||String(e)));
+  });
+  return()=>{active=false;clearTimeout(timer);auth.subscription.unsubscribe()};
+ },[authAttempt]);
  useEffect(()=>{if(!user){setProfile(null);return}$(supabase.from('profiles').select('*').eq('id',user.id).single()).then(setProfile).catch(fail)},[user,refresh]);
  if(!configured)return <main className="setup"><h1>Netbeds</h1><p>La configuration de connexion Supabase est manquante.</p><p>Renseignez les variables VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY dans les variables GitHub Actions, puis publiez à nouveau.</p></main>;
  if(loading)return <div className="center">Ouverture de votre espace Netbeds…</div>;
+ if(authProblem)return <main className="setup"><h1>Netbeds</h1><p>{authProblem}</p><p>Vérifiez votre connexion Internet et les paramètres Supabase.</p><button className="primary" onClick={()=>setAuthAttempt(n=>n+1)}>Réessayer la connexion</button></main>;
  if(!user)return <Auth fail={fail} err={err}/>;
  if(!profile)return <div className="center">{err||'Chargement du compte…'} <button onClick={reload}>Réessayer</button></div>;
  const admin=profile.role==='admin',dmc=profile.role==='dmc',agency=profile.role==='agency';
