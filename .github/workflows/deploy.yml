@@ -1,4 +1,4 @@
-name: Deploy Netbeds to GitHub Pages
+name: Deploy Netbeds V9 to GitHub Pages
 
 on:
   push:
@@ -36,8 +36,8 @@ jobs:
           test -n "$VITE_SUPABASE_ANON_KEY" || { echo "::error::VITE_SUPABASE_ANON_KEY manquante"; exit 1; }
           case "$VITE_SUPABASE_URL" in https://*) ;; *) echo "::error::VITE_SUPABASE_URL doit commencer par https://"; exit 1 ;; esac
           echo "Variables publiques detectees (valeurs masquees)."
-      - name: Validate V8 structure
-        run: npm run check:v7 && npm run check:v8
+      - name: Validate platform structure
+        run: npm run check:v7 && npm run check:v8 && npm run check:v9
       - name: Build
         run: npm run build
         env:

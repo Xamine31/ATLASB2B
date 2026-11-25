@@ -1,7 +1,7 @@
 {
-  "name": "netbeds-github-supabase",
+  "name": "netbeds-premium-v9",
   "private": true,
-  "version": "0.8.0",
+  "version": "0.9.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -10,7 +10,8 @@
     "check:dist": "node scripts/check-dist.mjs",
     "check:v6": "node scripts/check-v6.mjs",
     "check:v7": "node scripts/check-v7.mjs",
-    "check:v8": "node scripts/check-v8.mjs"
+    "check:v8": "node scripts/check-v8.mjs",
+    "check:v9": "node scripts/check-v9.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",

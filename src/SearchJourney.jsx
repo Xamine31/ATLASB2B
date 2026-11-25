@@ -7,13 +7,31 @@ const dayDiff=(from,to)=>Math.round((new Date(to+'T12:00:00')-new Date(from+'T12
 const BOARD_NAMES={'RO':'Hébergement seul','BB':'Petit-déjeuner inclus','HB':'Demi-pension','FB':'Pension complète','ALL IN':'Tout compris'};
 const money=n=>euro(Number(n||0));
 
-export default function SearchJourney({notify,fail}){
+export default function SearchJourney({route,navigate,notify,fail}){
  const [query,setQuery]=useState(''),[checkin,setCheckin]=useState(nextDate(4)),[checkout,setCheckout]=useState(nextDate(7)),[adults,setAdults]=useState(2),[children,setChildren]=useState(0),[rooms,setRooms]=useState(1);
  const [results,setResults]=useState([]),[selected,setSelected]=useState(null),[options,setOptions]=useState([]),[promos,setPromos]=useState([]),[chosen,setChosen]=useState(''),[guest,setGuest]=useState('');
  const [guestEmail,setGuestEmail]=useState(''),[guestPhone,setGuestPhone]=useState(''),[nationality,setNationality]=useState(''),[specialRequests,setSpecialRequests]=useState(''),[acceptTerms,setAcceptTerms]=useState(false);
  const [demoHotels,setDemoHotels]=useState([]),[demoOutcome,setDemoOutcome]=useState('confirmed');
  useEffect(()=>{supabase.from('demo_ratehawk_hotels_v8').select('hotel_id').then(({data,error})=>{if(!error)setDemoHotels((data||[]).map(x=>x.hotel_id))})},[]);
  const selectedMock=selected&&demoHotels.includes(selected.hotel_id);
+ useEffect(()=>{
+  if(!route.startsWith('/search/hotel/'))return;
+  const [rawId,rawQuery='']=route.slice('/search/hotel/'.length).split('?');
+  if(selected?.hotel_id===rawId)return;
+  const params=new URLSearchParams(rawQuery);
+  const ci=params.get('checkin'),co=params.get('checkout');
+  if(!ci||!co)return;
+  let active=true;
+  (async()=>{try{
+   const rs=await unpack(supabase.rpc('hotel_search_v7',{p_checkin:ci,p_checkout:co,p_city:params.get('city')||'',p_rooms:Number(params.get('rooms')||1),p_adults:Number(params.get('adults')||2),p_children:Number(params.get('children')||0)}));
+   const hotel=rs.find(x=>x.hotel_id===rawId);
+   if(!hotel||!active)return;
+   const [opts,pr]=await Promise.all([unpack(supabase.rpc('hotel_options_v7',{p_hotel:rawId,p_checkin:ci,p_checkout:co})),unpack(supabase.from('hotel_promotions').select('code,label,description,discount_percent').eq('hotel_id',rawId).eq('is_public',true))]);
+   if(!active)return;
+   setCheckin(ci);setCheckout(co);setQuery(params.get('city')||'');setRooms(Number(params.get('rooms')||1));setAdults(Number(params.get('adults')||2));setChildren(Number(params.get('children')||0));setResults(rs);setOptions(opts);setPromos(pr);setVerifiedDates(`${ci}|${co}`);setSelected(hotel);setSearched(true);
+  }catch(ex){if(active)fail(ex)}})();
+  return()=>{active=false};
+ },[route]);
  const [busy,setBusy]=useState(false),[searched,setSearched]=useState(false),[verifiedDates,setVerifiedDates]=useState(null),[term,setTerm]=useState('');
  const nights=dayDiff(checkin,checkout);
  const available=options.filter(o=>(o.capacity||2)*rooms>=adults+children);
@@ -33,7 +51,7 @@ export default function SearchJourney({notify,fail}){
     unpack(supabase.rpc('hotel_options_v7',{p_hotel:h.hotel_id,p_checkin:checkin,p_checkout:checkout})),
     unpack(supabase.from('hotel_promotions').select('code,label,description,discount_percent').eq('hotel_id',h.hotel_id).eq('is_public',true))
    ]);
-   setOptions(opts);setPromos(pr);setChosen('');setSelected(h);window.scrollTo({top:0,behavior:'smooth'});
+   setOptions(opts);setPromos(pr);setChosen('');setSelected(h);navigate(`/search/hotel/${h.hotel_id}?${new URLSearchParams({checkin,checkout,city:query,rooms:String(rooms),adults:String(adults),children:String(children)})}`);window.scrollTo({top:0,behavior:'smooth'});
   }catch(ex){fail(ex)}finally{setBusy(false)}
  };
  const request=async(e)=>{
@@ -44,7 +62,7 @@ export default function SearchJourney({notify,fail}){
    const bookingId=await unpack(supabase.rpc('submit_booking_with_guests_v8',{p_hotel:selected.hotel_id,p_room:choice.room_name,p_board:choice.board,p_checkin:checkin,p_checkout:checkout,p_guest:guest.trim(),p_room_count:rooms,p_adults:adults,p_children:children,p_email:guestEmail.trim(),p_phone:guestPhone.trim(),p_nationality:nationality.trim(),p_special:specialRequests.trim(),p_guests:[{name:guest.trim()}]}));
    if(selectedMock){try{await unpack(supabase.rpc('demo_ratehawk_resolve_v8',{p_booking:bookingId,p_outcome:demoOutcome}));notify(demoOutcome==='confirmed'?'Réservation fournisseur simulée confirmée. Crédit débité et dette fournisseur créée.':demoOutcome==='rejected'?'Refus fournisseur simulé. Crédit libéré.':'Fournisseur simulé sans réponse : crédit conservé en blocage.')}catch(e){notify('Demande créée avec montant bloqué. Simulation fournisseur incomplète : vérifie le dossier et contacte l’administrateur.')}}
    else notify('Demande enregistrée. Crédit bloqué jusqu’à validation ou refus. Consultez Mes réservations et Mon crédit.');
-   setSelected(null);setResults([]);setSearched(false);setGuest('');setGuestEmail('');setGuestPhone('');setNationality('');setSpecialRequests('');setAcceptTerms(false);
+   setSelected(null);navigate('/bookings');setResults([]);setSearched(false);setGuest('');setGuestEmail('');setGuestPhone('');setNationality('');setSpecialRequests('');setAcceptTerms(false);
   }catch(ex){fail(ex)}finally{setBusy(false)}
  };
  const changeDates=async(e)=>{e.preventDefault();await searchHotels()};
@@ -62,7 +80,7 @@ export default function SearchJourney({notify,fail}){
    {searched&&!results.length&&<div className="card v7-empty"><Search size={34}/><h3>Aucun hôtel disponible pour ces critères</h3><p>Vérifiez les dates et les tarifs publiés, ou recherchez une autre destination.</p></div>}
    <div className="v7-hotel-list">{results.map(h=><article className="v7-hotel-card" key={h.hotel_id}><div className="v7-hotel-photo">{h.cover_url?<img src={h.cover_url} alt={h.hotel_name}/>:<div className="v7-no-photo"><Hotel size={36}/><span>NETBEDS</span></div>}</div><div className="v7-hotel-description">{demoHotels.includes(h.hotel_id)&&<span className="pill">Fournisseur simulé · données fictives</span>}<div className="v7-stars">{'★'.repeat(Math.min(5,h.stars||3))}</div><h3>{h.hotel_name}</h3><p className="v7-location"><MapPin size={14}/>{h.city}, {h.country}</p><p className="v7-desc">{h.description||'Découvrez cet établissement et ses différentes formules de séjour.'}</p><span className="v7-small-pill">{h.options_count} option{Number(h.options_count)>1?'s':''} tarifaire{Number(h.options_count)>1?'s':''}</span></div><div className="v7-hotel-price"><small>À partir de</small><strong>{money(h.from_price)}</strong><span>Pour {nights} nuit{nights>1?'s':''} · {rooms} chambre{rooms>1?'s':''}</span><span>Hors promotions · sous réserve de confirmation</span><button className="primary" disabled={busy} onClick={()=>openHotel(h)}>Voir les offres <ChevronRight size={17}/></button></div></article>)}</div>
   </>:<>
-   <button className="v7-back" onClick={()=>{setSelected(null);setChosen('')}}><ArrowLeft size={16}/> Tous les hôtels</button>
+   <button className="v7-back" onClick={()=>{setSelected(null);setChosen('');navigate('/search')}}><ArrowLeft size={16}/> Tous les hôtels</button>
    <div className="v7-detail-hero"><div className="v7-detail-cover">{selected.cover_url?<img src={selected.cover_url} alt={selected.hotel_name}/>:<div className="v7-no-photo"><Hotel size={42}/></div>}</div><div className="v7-detail-title"><div className="v7-stars">{'★'.repeat(Math.min(5,selected.stars||3))}</div><h2>{selected.hotel_name}</h2><p><MapPin size={16}/>{selected.city}, {selected.country}</p><p>{selected.description||'Choisissez votre catégorie de chambre et votre formule pour obtenir le tarif exact.'}</p></div></div>
    <div className="v7-config-head"><div><span className="eyebrow">CONFIGURATION DE SÉJOUR</span><h3>Composez votre séjour</h3></div><span className="v7-small-pill"><ShieldCheck size={15}/> Tarif recalculé avant demande</span></div>
    <div className="v7-config-layout"><div className="v7-config-main">
