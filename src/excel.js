@@ -35,4 +35,33 @@ export async function parseNatbeds(file,year){
  const promotions=DEFAULT_PROMOS.map(p=>{const values=periods.map(period=>percent(cellText(ws.getCell(p.row,period.c))));const nonEmpty=values.filter(x=>x!==null);return {code:p.code,label:p.label,kind:p.kind,discount_percent:nonEmpty.length?nonEmpty[0]:0,periods:periods.filter((_,i)=>values[i]!==null).map((x)=>({date_start:x.dates[0],date_end:x.dates[1],discount_percent:values[periods.indexOf(x)]})),has_value:nonEmpty.length>0,variation:nonEmpty.some(x=>x!==nonEmpty[0])}});
  return {rates,promotions,periods:periods.map(p=>({date_start:p.dates[0],date_end:p.dates[1]})),rooms:[...new Set(rates.map(x=>x.room_name))]};
 }
-export async function exportRates(hotel,rows){const wb=new ExcelJS.Workbook(),ws=wb.addWorksheet('Tarifs');ws.addRow(['Hôtel','Chambre','Pension','Début','Fin','Tarif net EUR']);for(const r of rows)ws.addRow([hotel,r.room_name,r.board,r.date_start,r.date_end,Number(r.net_price)]);ws.columns=[{width:28},{width:23},{width:14},{width:17},{width:17},{width:18}];ws.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}};ws.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF252A24'}};const buff=await wb.xlsx.writeBuffer();const url=URL.createObjectURL(new Blob([buff],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));const a=document.createElement('a');a.href=url;a.download=`tarifs_${hotel.replace(/[^a-z0-9]/gi,'_')}.xlsx`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500)}
+export async function exportRates(hotel,rows,year=new Date().getFullYear(),promotions=[]){
+ const response=await fetch(`${import.meta.env.BASE_URL}modele_tarifs_natbeds.xlsx`);
+ if(!response.ok)throw Error('Modèle de grille introuvable sur le site');
+ const wb=new ExcelJS.Workbook();await wb.xlsx.load(await response.arrayBuffer());const ws=wb.worksheets[0];
+ const periodCols=[2,7,12,17,22,27];const periods=periodCols.map(c=>dateRange(cellText(ws.getCell(3,c)),Number(year)));
+ const indexed=new Map(rows.map(r=>[`${r.room_name.trim().toUpperCase()}|${r.board}|${r.date_start}|${r.date_end}`,r]));
+ for(let r=5;r<=14;r++){
+  const room=cellText(ws.getCell(r,1)).toUpperCase().replace(/\s+/g,' ').trim();
+  for(let k=0;k<periods.length;k++)for(let j=0;j<BOARDS.length;j++){
+   const [start,end]=periods[k];const match=indexed.get(`${room}|${BOARDS[j]}|${start}|${end}`);
+   ws.getCell(r,periodCols[k]+j).value=match?Number(match.net_price):null;
+  }
+ }
+ for(const promo of DEFAULT_PROMOS){
+  const entry=promotions.find(p=>p.code===promo.code);
+  for(let k=0;k<periods.length;k++){
+   const [start,end]=periods[k];const period=entry?.hotel_promotion_periods?.find(x=>x.date_start===start&&x.date_end===end);
+   const value=period?.discount_percent??entry?.discount_percent;
+   ws.getCell(promo.row,periodCols[k]).value=value!=null&&Number(value)>0?`-${Number(value)}%`:null;
+  }
+ }
+ const full=wb.addWorksheet('Historique des tarifs');
+ full.addRow(['Hôtel','Chambre','Pension','Du','Au','Tarif net (EUR)']);
+ for(const r of rows)full.addRow([hotel,r.room_name,r.board,r.date_start,r.date_end,Number(r.net_price)]);
+ full.columns=[{width:32},{width:22},{width:14},{width:18},{width:18},{width:19}];
+ full.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}};
+ full.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF082B55'}};
+ const buffer=await wb.xlsx.writeBuffer();const url=URL.createObjectURL(new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+ const a=document.createElement('a');a.href=url;a.download=`netbeds_tarifs_${hotel.replace(/[^a-z0-9]/gi,'_')}_${year}.xlsx`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);
+}

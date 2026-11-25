@@ -1,7 +1,7 @@
 {
-  "name": "atlasb2b-github-supabase",
+  "name": "netbeds-github-supabase",
   "private": true,
-  "version": "0.7.0",
+  "version": "0.8.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "check:dist": "node scripts/check-dist.mjs",
     "check:v6": "node scripts/check-v6.mjs",
-    "check:v7": "node scripts/check-v7.mjs"
+    "check:v7": "node scripts/check-v7.mjs",
+    "check:v8": "node scripts/check-v8.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",

@@ -1,66 +1,64 @@
-# AtlasB2B Premium V7 — parcours hôtelier et portefeuille réservé
+# NETBEDS · Plateforme hôtelière B2B — V8
 
-Application React/Vite sur **GitHub Pages** et données dans **Supabase** (Auth, PostgreSQL, Storage). Trois espaces : **agence, DMC, administration**. Environnement de **démonstration** : les opérations financières sont fictives. Aucune réservation fournisseur n'est effectuée et aucun virement bancaire n'est lancé.
+Application React/Vite publiée par GitHub Pages et adossée à Supabase Auth, PostgreSQL, RLS, Storage et fonctions RPC. **Environnement de démonstration : réservations, fonds et connecteur RateHawk fictifs.**
 
-## Installation depuis la V6 (IMPORTANT)
+## 1. Installer ou mettre à jour
 
-1. Sauvegarder le dépôt GitHub **et** la base Supabase (schéma, données, politiques). Tester de préférence sur un projet Supabase de préproduction.
-2. Les migrations V5 et V6 doivent **déjà** être appliquées. Dans Supabase → **SQL Editor**, exécuter **une seule fois** le fichier `supabase/migration_v7_reservation_finance.sql`. Ne pas réexécuter `schema.sql`, V5 ou V6 sur une base existante. La migration V7 ne supprime pas les réservations ou prix antérieurs.
-3. Mettre tous les fichiers du ZIP à la racine du dépôt `ATLASB2B`, y compris `.github/workflows/deploy.yml`, et pousser sur `main`.
-4. GitHub → Settings → Pages → Source **GitHub Actions**. Les variables du dépôt `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` doivent contenir l'URL du projet et sa clé **publique**. Ne jamais utiliser une clé `service_role` côté navigateur.
-5. GitHub → **Actions** → **Deploy AtlasB2B to GitHub Pages**. Ouvrir `https://xamine31.github.io/ATLASB2B/` (adapter le compte GitHub au besoin).
-6. Configurer dans Supabase Auth les URL de redirection du site si nécessaire.
+**Sauvegarder le dépôt GitHub et exporter une copie de la base Supabase de test avant toute migration.**
 
-**Ordre de déploiement recommandé : migration SQL d'abord, GitHub ensuite.** Une nouvelle interface V7 déployée sans migration affichera notamment « Could not find the function public.hotel_search_v7 ».
+### Base existante V7
 
-## Fonctionnalités V7
+Dans Supabase > SQL Editor, exécuter **uniquement** `supabase/migration_v8_netbeds.sql` **après** l'application réussie des migrations précédentes V5, V6, V7. Ne pas relancer `schema.sql` ni V5–V7 si déjà exécutés. La migration V8 n'efface pas les agences, les hôtels ou les réservations existants. Elle crée des tables et des fonctions additionnelles, remplace `hotel_options_v7`, `submit_booking_v7` et `admin_booking_status` pour intégrer les exceptions de marge et les réservations simulées. Faire l'opération d'abord sur une base de test copiée.
 
-### Recherche et fiche hôtel
-- Une carte **par hôtel**, avec prix **« À partir de »** : meilleur prix de base pour les dates, le nombre de chambres et la composition renseignés, sans promotion.
-- Détail par établissement : images, description, options chambre/pension, capacités, prix recalculés, quantité de chambres et récapitulatif.
-- Le tarif de base s'appuie exclusivement sur les périodes de l'Excel, le tarif net et la majoration de l'agence. Les promotions visibles sont **indicatives et non déduites** : les règles d'application/cumul n'ont pas encore été développées.
-- Aucune disponibilité d'inventaire temps réel : les résultats dépendent des tarifs publiés mais **ne garantissent pas de chambre libre**. Toute réservation reste une **demande**.
+### Base vierge
 
-### Réservations et finances
-- Une agence approuvée avec crédit suffisant soumet une demande → le prix est **recalculé par SQL** → un **blocage** est créé immédiatement dans la même transaction.
-- Crédit disponible = somme des écritures de portefeuille − somme des blocages actifs.
-- Une validation administrateur crée **une fois** le débit `booking_debit` et **un** règlement fournisseur en brouillon, enregistre l'audit et consomme le blocage dans la même transaction PostgreSQL.
-- Un refus administrateur libère le blocage sans débit.
-- L'agence peut demander un rechargement ; l'administrateur doit vérifier et approuver le crédit. Les règlements fournisseurs suivent la validation puis le rapprochement **manuels**. Aucune connexion SEPA/banque.
-- Les anciens dossiers V6 sans blocage V7 sont conservés mais **ne peuvent pas être validés** avec la nouvelle fonction. Ils doivent être examinés séparément et ne sont pas migrés rétroactivement.
-- L'écriture manuelle `booking_debit` est interdite en V7 : le débit est réalisé uniquement à la confirmation. Les ajustements et remboursements restent limités à l'admin.
-- Les fonctions de blocage verrouillent la ligne agence pour éviter des demandes concurrentes débouchant sur un crédit négatif. L'index unique sur les débits et les contrôles de statut empêchent une double confirmation.
-- La dette fournisseur est basée sur le **net fournisseur** enregistré dans la réservation. Il s'agit d'une écriture de test ; les taxes, commissions réglementaires et les annulations financières complexes ne sont pas implémentées.
+Exécuter dans l'ordre : `supabase/schema.sql`, `supabase/migration_depuis_v1.sql` uniquement si requis par les instructions de cette migration, `supabase/migration_v5_finances.sql`, `supabase/migration_v6_catalogue.sql`, `supabase/migration_v7_reservation_finance.sql`, puis `supabase/migration_v8_netbeds.sql`. **Lire le préambule de chaque fichier SQL** avant de l'exécuter ; les bases préexistantes peuvent nécessiter un chemin de migration différent. Une installation sur base neuve n'a pas été testée dans cet environnement.
 
-## Scénario de test intégral
+### GitHub Pages
 
-1. Se connecter en **admin**, vérifier qu'une agence et un DMC sont approuvés et qu'un hôtel est **publié**.
-2. Pour l'hôtel : au moins une chambre **publique** et des tarifs couvrant toutes les nuits. Importer `exemple_tarifs_fictifs.xlsx` si nécessaire via la fiche hôtel.
-3. En admin → **Centre financier** → une demande de rechargement fictif de l'agence (ou une écriture d'ajustement documentée), puis valider. **Ne pas prétendre qu'un virement réel est arrivé**.
-4. En agence → **Mon crédit**, vérifier par exemple crédit comptabilisé 5 000 €, bloqué 0 €, disponible 5 000 €.
-5. En agence → **Rechercher un hôtel**, entrer destination/dates/chambres/voyageurs, vérifier **une seule carte par hôtel** et le montant « À partir de ».
-6. Ouvrir l'hôtel : changer la chambre, la pension et le nombre de chambres. Vérifier le prix. Renseigner le voyageur et soumettre.
-7. Retourner dans **Mon crédit** : crédit comptabilisé inchangé, **montant bloqué** égal à la demande, disponible diminué.
-8. En admin → **Demandes** → **Valider**. En centre financier : blocage 0, débit du montant de l'agence, nouveau règlement fournisseur **brouillon** du montant net, audit. Marquer ensuite le règlement **approuvé**, puis **payé** avec référence fictive ; aucun virement n'est réellement transmis.
-9. Refaire avec une deuxième réservation, puis choisir **Refuser**. Le crédit bloqué doit être libéré sans débit.
-10. Essayer une réservation dont le prix dépasse le disponible : refus SQL « Crédit insuffisant ». Tester deux clics / soumissions simultanées ; aucune agence ne doit pouvoir dépenser deux fois le même crédit.
+Décompresser les fichiers **directement à la racine du dépôt `ATLASB2B`**, si vous conservez ce dépôt : ne pas créer de sous-dossier Netbeds. Dans Settings > Pages, choisir **GitHub Actions** comme source.
 
-## Limites avant toute production commerciale
+Dans Settings > Secrets and variables > Actions > **Variables**, garder :
 
-- Aucun inventaire/allotement garanti ni confirmation auprès d'un hôtel ou d'une API.
-- Tarifs enfants, suppléments, conditions d'annulation et promotions non calculés automatiquement.
-- Pas de véritable encaissement, virement, rapprochement bancaire automatique, SEPA ni comptabilité légale.
-- L'application ne doit **pas** être utilisée pour encaisser des fonds ou confirmer de vraies réservations. Avant toute exploitation avec argent réel : audit sécurité, tests transactionnels sur Supabase, politiques RLS, revue juridique et réglementaire (agence de voyages, fonds prépayés et réglementation des services de paiement).
-- V7 exige une migration PostgreSQL testée sur **ta** base : la compilation JavaScript ne valide pas les procédures SQL en contexte réel.
+- `VITE_SUPABASE_URL` = URL publique du projet Supabase.
+- `VITE_SUPABASE_ANON_KEY` = clé publique anon/publishable Supabase, **jamais une clé `service_role`**.
 
-## Développement
+Le workflow `.github/workflows/deploy.yml` fait `npm install`, `npm run check:v7 && npm run check:v8`, `npm run build` puis `npm run check:dist` avant publication. **Le `base` Vite s'ajuste au nom réel du dépôt** avec `GITHUB_REPOSITORY`, donc GitHub Pages continuera de fonctionner à `https://xamine31.github.io/ATLASB2B/` tant que le dépôt reste `ATLASB2B`.
 
-```bash
-npm install
-npm run check:v7
-npm run build
-npm run check:dist
-npm run dev
-```
+En local : copier `.env.example` vers `.env.local`, remplir les deux variables publiques puis `npm install && npm run dev`.
 
-Dans Codespaces, utiliser `npm`, pas `npm.cmd`. En local, copier `.env.example` vers `.env.local` et compléter les **clés publiques** Supabase. Le workflow GitHub Pages compile `dist` et vérifie les chemins `/ATLASB2B/assets/`. Les commentaires de code sont destinés aux mainteneurs ; l'interface utilisateur n'affiche pas de consignes techniques internes.
+### Auth Supabase
+
+Dans Supabase > Authentication > URL Configuration, conserver l'URL du site réellement publié. Avec le dépôt existant : `https://xamine31.github.io/ATLASB2B/`. Régler les redirections de connexion selon votre configuration Supabase Auth.
+
+## 2. Tester les fonctions
+
+1. **Admin :** se connecter et vérifier les comptes approuvés ; renseigner **Conditions agences** (marge, exceptions par hôtel, seuil d'alerte).
+2. **DMC :** créer un hôtel dans **Mes hôtels**, compléter photos, description, chambres et publicité de la chambre.
+3. **DMC :** ouvrir **Tarifs**, télécharger le modèle de grille, sélectionner l'année de départ de saison, importer `exemple_tarifs_fictifs.xlsx` puis cliquer sur **Enregistrer dans Supabase**. Vérifier les lignes relues. Tester **Exporter la grille Excel** : première feuille dans le format du modèle, deuxième feuille détaillée.
+4. **Admin :** publier l'hôtel puis créer un **Contrat hôtelier** en brouillon, l'approuver et le publier.
+5. **Agence :** disposer d'un crédit fictif validé, puis rechercher un séjour couvert par les saisons importées. Les résultats présentent une carte par hôtel et le prix « À partir de » hors promotions. Ouvrir la fiche, configurer le séjour, renseigner coordonnées et accepter les conditions. Envoyer la demande.
+6. **Admin :** vérifier la réservation en attente, puis la confirmer ou la refuser. Contrôler crédit bloqué, débit et dette partenaire. Une demande de rechargement ne crédite le portefeuille qu'après validation Admin.
+7. **Admin :** aller dans **RateHawk simulé**, initialiser les trois établissements fictifs et vérifier leur visibilité dans les résultats agence. Se connecter comme agence et choisir les scénarios **confirmé / refusé / en attente** sur des réservations distinctes.
+
+## 3. Limites de fonctionnement
+
+**Ne pas traiter de vraie réservation ni de vrai virement avec cette V8.** Les hôtels de démonstration sont fictifs. Les promotions visibles ne sont pas déduites des prix. Les contrats enregistrés ne filtrent pas encore automatiquement la commercialisation, les allotements et arrêts de vente ne sont pas encore gérés, la TVA et la multi-devise ne sont pas finalisées. L'activation réelle de RateHawk nécessitera contrat, identifiants Sandbox, Edge Functions sécurisées, certification et tests de tarification/reconfirmation. En cas de réponse incertaine, ne jamais renouveler automatiquement une réservation fournisseur.
+
+L'application conserve l'historique financier V5–V7. Un remboursement bancaire, une dette réelle ou la détention de fonds prépayés sont **hors périmètre** et nécessiteront une validation métier, juridique et technique.
+
+## 4. Fichiers essentiels
+
+- `src/HotelWorkspace.jsx` : fiche hôtel/chambres/photos/promotions/tarifs et import/export Excel.
+- `src/excel.js` : lecture du modèle NATBEDS, saison, chambres/pensions, export dans le même modèle.
+- `src/SearchJourney.jsx` : recherche une carte par hôtel, options, voyageurs, réservation.
+- `src/FinancePanel.jsx` : portefeuille, rechargements, dettes et audit.
+- `src/ContractsPanel.jsx` : fiches contrat, approbation et versionnement simple.
+- `src/AgencyConditions.jsx` : marges et exceptions par établissement.
+- `src/RatehawkDemo.jsx` : fournisseur fictif configurable.
+- `supabase/migration_v8_netbeds.sql` : tables RLS et fonctions SQL V8.
+- `AMELIORATIONS_V8.md` : modifications et limitations détaillées.
+
+## 5. Contrôles effectués à la génération
+
+Les sources JSX/JS passent un contrôle de parsing syntaxique ; `npm run check:v6`, `npm run check:v7`, `npm run check:v8` contrôlent la structure. Le build npm et l'exécution réelle sur Supabase **ne sont pas validés ici** si l'installation des dépendances réseau n'est pas disponible. GitHub Actions jouera le rôle de premier build de référence. La migration doit être exécutée sur une **base de test**.

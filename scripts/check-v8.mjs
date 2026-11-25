@@ -1,0 +1,12 @@
+import fs from 'node:fs';
+const text=p=>fs.readFileSync(p,'utf8');
+const main=text('src/main.jsx'),search=text('src/SearchJourney.jsx'),contracts=text('src/ContractsPanel.jsx'),xls=text('src/excel.js'),sql=text('supabase/migration_v8_netbeds.sql'),workflow=text('.github/workflows/deploy.yml');
+const verify=(name,content,parts)=>{for(const p of parts)if(!content.includes(p))throw Error(`V8 ${name}: manque ${p}`)};
+verify('navigation',main,['ContractsPanel','AgencyConditions','RatehawkDemo','Netbeds','SearchJourney','FinancePanel']);
+verify('recherche',search,['hotel_search_v7','hotel_options_v7','submit_booking_with_guests_v8','demo_ratehawk_resolve_v8','À partir de']);
+verify('contrats',contracts,['hotel_contracts_v8','admin_contract_status_v8','valid_from','valid_to']);
+verify('tarifs',xls,['parseNatbeds','exportRates','modele_tarifs_natbeds.xlsx','DEFAULT_PROMOS','DEFAULT_ROOMS']);
+verify('migration',sql,['agency_hotel_markups','booking_guest_details_v8','demo_ratehawk_resolve_v8','admin_seed_ratehawk_demo_v8','admin_set_demo_mode_v8','CREATE OR REPLACE FUNCTION public.hotel_options_v7','FOR UPDATE OF ag','booking_debit','supplier_payables','is_admin()']);
+verify('pages',workflow,['path: ./dist','npm run build','VITE_SUPABASE_URL','VITE_SUPABASE_ANON_KEY']);
+for(const path of ['public/modele_tarifs_natbeds.xlsx','public/exemple_tarifs_fictifs.xlsx','supabase/migration_v8_netbeds.sql','README.md'])if(!fs.existsSync(path))throw Error('Fichier manquant '+path);
+console.log('V8: structure, schéma, import/export, simulateur, navigation et workflow: OK.');
